@@ -1,10 +1,10 @@
 import axios from 'axios'
 import { handleMockRequest } from './mockAdapter.js'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 const axiosClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -13,13 +13,20 @@ axiosClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  // Serve requests instantly via mock adapter when no live backend URL is set
+  if (!import.meta.env.VITE_API_BASE_URL) {
+    config.adapter = async (cfg) => {
+      return handleMockRequest(cfg)
+    }
+  }
+
   return config
 })
 
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // If backend is offline or network error occurs, fall back gracefully to mock handlers
     if (!error.response || error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
       try {
         const mockRes = handleMockRequest(error.config)
@@ -30,7 +37,6 @@ axiosClient.interceptors.response.use(
     }
 
     if (error?.response?.status === 401) {
-      // token invalid/expired - clear local session; UI decides where to redirect
       localStorage.removeItem('mc_token')
       localStorage.removeItem('mc_user')
     }
@@ -39,4 +45,5 @@ axiosClient.interceptors.response.use(
 )
 
 export default axiosClient
+
 
